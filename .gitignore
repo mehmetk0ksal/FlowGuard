@@ -1,0 +1,6 @@
+# Python sanal ortamı ve derleme dosyaları
+.venv/
+__pycache__/
+
+models/*.pkl
+data/

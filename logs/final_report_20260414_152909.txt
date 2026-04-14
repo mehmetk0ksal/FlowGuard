@@ -1,0 +1,32 @@
+
+--- Gerçek Dünya Sınavı (Final Test) Başladı ---
+Hız Testi: Toplam 522051 paket 11.47 saniyede analiz edildi.
+Ortalama Gecikme: Paket başına 0.0220 milisaniye (ms).
+
+=> Genel F1-Score (Ağırlıklı - Normal): %98.58
+=> Genel F1-Score (Macro - Zorlayıcı): %70.31
+
+--- Kategori Bazlı İsabet Oranları (Recall) ---
+Tür 0 (Normal  ) -> %98.74 başarı ile tespit edildi. (Bildiği: 502182 / Toplam: 508613)
+Tür 1 (Recon   ) -> %85.44 başarı ile tespit edildi. (Bildiği: 2194 / Toplam: 2568)
+Tür 2 (Exploits) -> %91.67 başarı ile tespit edildi. (Bildiği: 4641 / Toplam: 5063)
+Tür 3 (DoS     ) -> %20.90 başarı ile tespit edildi. (Bildiği: 140 / Toplam: 670)
+Tür 4 (Generic ) -> %87.23 başarı ile tespit edildi. (Bildiği: 4481 / Toplam: 5137)
+
+--- Kritik Güvenlik (Kaçak) Analizi ---
+Test Setindeki Toplam Gerçek Saldırı: 13438
+Modelin Normal Sanıp İÇERİ SIZDIRDIĞI Saldırı: 222 (Kaçak Oranı: %1.65)
+[DURUM: MÜKEMMEL] Model sistemi bir kalkan gibi koruyor!
+
+Detaylı Skorbord (Classification Report):
+              precision    recall  f1-score   support
+
+      Normal       1.00      0.99      0.99    508613
+       Recon       0.83      0.85      0.84      2568
+    Exploits       0.67      0.92      0.77      5063
+         DoS       0.60      0.21      0.31       670
+     Generic       0.46      0.87      0.60      5137
+
+    accuracy                           0.98    522051
+   macro avg       0.71      0.77      0.70    522051
+weighted avg       0.99      0.98      0.99    522051

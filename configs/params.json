@@ -1,0 +1,21 @@
+{
+    "architecture": {
+        "strategy": "Voting",
+        "models": [
+            "XGBoost",
+            "LightGBM"
+        ]
+    },
+    "parameters": {
+        "XGBoost": {
+            "n_estimators": 300,
+            "max_depth": 7,
+            "learning_rate": 0.05
+        },
+        "LightGBM": {
+            "n_estimators": 300,
+            "max_depth": 7,
+            "learning_rate": 0.05
+        }
+    }
+}
