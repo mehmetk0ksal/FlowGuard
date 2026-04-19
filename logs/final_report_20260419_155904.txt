@@ -1,7 +1,7 @@
 
 --- Gerçek Dünya Sınavı (Final Test) Başladı ---
-Hız Testi: Toplam 522051 paket 5.80 saniyede analiz edildi.
-Ortalama Gecikme: Paket başına 0.0111 milisaniye (ms).
+Hız Testi: Toplam 522051 paket 5.68 saniyede analiz edildi.
+Ortalama Gecikme: Paket başına 0.0109 milisaniye (ms).
 
 => Genel F1-Score (Ağırlıklı - Normal): %98.59
 => Genel F1-Score (Macro - Zorlayıcı): %70.44
