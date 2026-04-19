@@ -19,7 +19,7 @@ from sklearn.metrics import (
 # PAGE CONFIG
 # ---------------------------------------------------
 st.set_page_config(
-    page_title="FlowGuard // Cyberpunk Console",
+    page_title="FlowGuard ",
     page_icon="🛡️",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -193,13 +193,13 @@ hr {
 @st.cache_resource
 def load_model(model_path: str):
     if not os.path.exists(model_path):
-        raise FileNotFoundError(f"Model bulunamadı: {model_path}")
+        raise FileNotFoundError(f"Model not found: {model_path}")
     return joblib.load(model_path)
 
 @st.cache_data
 def load_selected_features(features_path: str):
     if not os.path.exists(features_path):
-        raise FileNotFoundError(f"Feature listesi bulunamadı: {features_path}")
+        raise FileNotFoundError(f"Feature list not found: {features_path}")
     with open(features_path, "r", encoding="utf-8") as f:
         return json.load(f)
 
@@ -214,7 +214,7 @@ def prepare_input_dataframe(df: pd.DataFrame, selected_features: list[str]) -> p
     missing_cols = [col for col in selected_features if col not in df.columns]
     if missing_cols:
         raise ValueError(
-            "CSV dosyasında eksik sütunlar var:\n" + ", ".join(missing_cols)
+            "The CSV file is missing required columns:\n" + ", ".join(missing_cols)
         )
     X = df[selected_features].copy()
     X = optimize_dtypes_for_trees(X)
@@ -269,6 +269,7 @@ def parse_latest_log(log_path: str):
         "recall_by_class": {}
     }
 
+    # Still matches Turkish log content
     weighted_match = re.search(r"Ağırlıklı - Normal\): %([0-9.]+)", text)
     macro_match = re.search(r"Macro - Zorlayıcı\): %([0-9.]+)", text)
     total_attack_match = re.search(r"Toplam Gerçek Saldırı: (\d+)", text)
@@ -353,7 +354,7 @@ try:
     model = load_model(MODEL_PATH)
     selected_features = load_selected_features(FEATURES_PATH)
 except Exception as e:
-    st.error(f"Başlangıç hatası: {e}")
+    st.error(f"Startup error: {e}")
     st.stop()
 
 latest_log_file = find_latest_log_file(LOGS_DIR)
@@ -364,25 +365,25 @@ latest_log_metrics = parse_latest_log(latest_log_file) if latest_log_file else N
 # ---------------------------------------------------
 with st.sidebar:
     st.markdown("## ⚙️ System Node")
-    st.markdown("**Model yolu**")
+    st.markdown("**Model path**")
     st.code(MODEL_PATH, language="text")
 
     st.markdown("**Feature config**")
     st.code(FEATURES_PATH, language="text")
 
-    st.markdown("**Beklenen feature sayısı**")
+    st.markdown("**Expected feature count**")
     st.write(len(selected_features))
 
     st.markdown("---")
     st.markdown("### 📡 Input Protocol")
     st.write(
-        "Bu sürüm doğrudan **feature-level CSV** bekler. "
-        "Ham **PCAP** dosyası için ayrıca feature extraction katmanı gerekir."
+        "This version expects a **feature-level CSV** directly. "
+        "A raw **PCAP** file requires an additional feature extraction layer."
     )
 
     if latest_log_file:
         st.markdown("---")
-        st.markdown("### 🧾 Son Log")
+        st.markdown("### 🧾 Latest Log")
         st.caption(os.path.basename(latest_log_file))
 
 # ---------------------------------------------------
@@ -390,7 +391,7 @@ with st.sidebar:
 # ---------------------------------------------------
 st.markdown('<div class="cyber-title">🛡️ FlowGuard // Cyber Traffic Analyzer</div>', unsafe_allow_html=True)
 st.markdown(
-    '<div class="cyber-subtitle">Neon destekli tehdit görünürlüğü, log analizi ve model tabanlı trafik sınıflandırma paneli.</div>',
+    '<div class="cyber-subtitle">Neon-enhanced threat visibility, log analysis, and model-based traffic classification dashboard.</div>',
     unsafe_allow_html=True
 )
 
@@ -405,7 +406,7 @@ if latest_log_metrics:
         <div class="metric-card">
             <div class="metric-title">Weighted F1</div>
             <div class="metric-value">%{latest_log_metrics['weighted_f1'] if latest_log_metrics['weighted_f1'] is not None else '-'}</div>
-            <div class="metric-delta">Genel saha başarımı</div>
+            <div class="metric-delta">Overall field performance</div>
         </div>
         """, unsafe_allow_html=True)
 
@@ -414,25 +415,25 @@ if latest_log_metrics:
         <div class="metric-card">
             <div class="metric-title">Macro F1</div>
             <div class="metric-value">%{latest_log_metrics['macro_f1'] if latest_log_metrics['macro_f1'] is not None else '-'}</div>
-            <div class="metric-delta">Sınıflar arası denge</div>
+            <div class="metric-delta">Cross-class balance</div>
         </div>
         """, unsafe_allow_html=True)
 
     with c3:
         st.markdown(f"""
         <div class="metric-card">
-            <div class="metric-title">Toplam Saldırı</div>
+            <div class="metric-title">Total Attacks</div>
             <div class="metric-value">{latest_log_metrics['total_attacks'] if latest_log_metrics['total_attacks'] is not None else '-'}</div>
-            <div class="metric-delta">Test logundan çekildi</div>
+            <div class="metric-delta">Extracted from test log</div>
         </div>
         """, unsafe_allow_html=True)
 
     with c4:
         st.markdown(f"""
         <div class="metric-card">
-            <div class="metric-title">Kaçak Oranı</div>
+            <div class="metric-title">Leak Rate</div>
             <div class="metric-value">%{latest_log_metrics['miss_rate'] if latest_log_metrics['miss_rate'] is not None else '-'}</div>
-            <div class="metric-delta">Normal sanılan saldırılar</div>
+            <div class="metric-delta">Attacks classified as normal</div>
         </div>
         """, unsafe_allow_html=True)
 
@@ -442,7 +443,7 @@ if latest_log_metrics:
 
     with chart_col1:
         st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-        st.markdown('<div class="section-title">Sınıf Bazlı Recall Dağılımı</div>', unsafe_allow_html=True)
+        st.markdown('<div class="section-title">Class Recall Distribution</div>', unsafe_allow_html=True)
 
         recall_data = []
         for class_id, info in latest_log_metrics["recall_by_class"].items():
@@ -464,13 +465,13 @@ if latest_log_metrics:
 
     with chart_col2:
         st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-        st.markdown('<div class="section-title">Kaçak / Engellenen Saldırılar</div>', unsafe_allow_html=True)
+        st.markdown('<div class="section-title">Leaked / Blocked Attacks</div>', unsafe_allow_html=True)
 
         if latest_log_metrics["total_attacks"] is not None and latest_log_metrics["missed_attacks"] is not None:
             caught = latest_log_metrics["total_attacks"] - latest_log_metrics["missed_attacks"]
             fig_leak = make_donut(
                 values=[caught, latest_log_metrics["missed_attacks"]],
-                names=["Engellenen", "Kaçak"],
+                names=["Blocked", "Leaked"],
                 title="Attack Containment"
             )
             st.plotly_chart(fig_leak, use_container_width=True)
@@ -482,7 +483,7 @@ if latest_log_metrics:
     recall_bar_col, _ = st.columns([1.2, 0.01])
     with recall_bar_col:
         st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-        st.markdown('<div class="section-title">Recall Karşılaştırma Paneli</div>', unsafe_allow_html=True)
+        st.markdown('<div class="section-title">Recall Comparison Panel</div>', unsafe_allow_html=True)
 
         if recall_data:
             recall_df = pd.DataFrame(recall_data)
@@ -496,43 +497,43 @@ st.markdown("<hr>", unsafe_allow_html=True)
 # ---------------------------------------------------
 # TABS
 # ---------------------------------------------------
-tab1, tab2, tab3 = st.tabs(["📂 CSV ile Tahmin", "🧬 Beklenen Feature'lar", "🧾 Log Önizleme"])
+tab1, tab2, tab3 = st.tabs(["📂 CSV Prediction", "🧬 Expected Features", "🧾 Log Preview"])
 
 with tab2:
     st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-    st.markdown('<div class="section-title">Modelin Beklediği Feature Listesi</div>', unsafe_allow_html=True)
-    st.caption(f"Toplam feature sayısı: {len(selected_features)}")
+    st.markdown('<div class="section-title">Feature List Expected by the Model</div>', unsafe_allow_html=True)
+    st.caption(f"Total feature count: {len(selected_features)}")
     st.code("\n".join(selected_features), language="text")
     st.markdown('</div>', unsafe_allow_html=True)
 
 with tab3:
     st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-    st.markdown('<div class="section-title">Son Final Report İçeriği</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-title">Latest Final Report Content</div>', unsafe_allow_html=True)
     if latest_log_file:
         with open(latest_log_file, "r", encoding="utf-8") as f:
             st.code(f.read(), language="text")
     else:
-        st.warning("logs klasöründe final_report bulunamadı.")
+        st.warning("No final_report file was found in the logs folder.")
     st.markdown('</div>', unsafe_allow_html=True)
 
 with tab1:
     st.markdown('<div class="glass-card">', unsafe_allow_html=True)
     st.markdown('<div class="section-title">CSV Upload Console</div>', unsafe_allow_html=True)
-    uploaded_file = st.file_uploader("Bir CSV dosyası seç", type=["csv"])
+    uploaded_file = st.file_uploader("Select a CSV file", type=["csv"])
 
     st.markdown(
-        '<div class="small-muted">En iyi sonuç için CSV dosyan modelin beklediği sütunları içermeli. '
-        'Eğer <b>Label</b> sütunu da varsa gerçek etiket karşılaştırması yapabiliriz.</div>',
+        '<div class="small-muted">For best results, your CSV should contain the columns expected by the model. '
+        'If it also includes a <b>Label</b> column, we can compare against the ground truth.</div>',
         unsafe_allow_html=True
     )
 
     if uploaded_file is not None:
         try:
             df = pd.read_csv(uploaded_file)
-            st.success(f"CSV yüklendi. Satır: {len(df)} | Sütun: {len(df.columns)}")
+            st.success(f"CSV uploaded successfully. Rows: {len(df)} | Columns: {len(df.columns)}")
             st.dataframe(df.head(15), use_container_width=True)
         except Exception as e:
-            st.error(f"CSV okunamadı: {e}")
+            st.error(f"Could not read CSV: {e}")
             st.stop()
 
         try:
@@ -541,22 +542,22 @@ with tab1:
             st.error(str(e))
             st.stop()
 
-        if st.button("🚀 Tahmini Başlat"):
-            with st.spinner("Neural threat matrix aktif..."):
+        if st.button("🚀 Start Prediction"):
+            with st.spinner("Neural threat matrix engaged..."):
                 try:
                     preds = model.predict(X)
                     proba = safe_predict_proba(model, X)
                     results_df = build_results_df(df, preds, proba)
                 except Exception as e:
-                    st.error(f"Tahmin sırasında hata oluştu: {e}")
+                    st.error(f"An error occurred during prediction: {e}")
                     st.stop()
 
-            st.success("Tahmin tamamlandı.")
+            st.success("Prediction completed.")
 
             m1, m2, m3 = st.columns(3)
-            m1.metric("Toplam Kayıt", len(results_df))
-            m2.metric("Feature Sayısı", len(selected_features))
-            m3.metric("Tahmin Sınıfı Çeşidi", results_df["Predicted_Label_Name"].nunique())
+            m1.metric("Total Records", len(results_df))
+            m2.metric("Feature Count", len(selected_features))
+            m3.metric("Predicted Class Variety", results_df["Predicted_Label_Name"].nunique())
 
             dist_df = (
                 results_df["Predicted_Label_Name"]
@@ -579,11 +580,11 @@ with tab1:
                 fig_pred_bar = make_bar(dist_df, x="Class", y="Count", title="Predicted Class Counts")
                 st.plotly_chart(fig_pred_bar, use_container_width=True)
 
-            st.markdown("### Sonuç Tablosu")
+            st.markdown("### Results Table")
             st.dataframe(results_df.head(200), use_container_width=True)
 
             if "Label" in df.columns:
-                st.markdown("### Gerçek Etiket Karşılaştırması")
+                st.markdown("### Ground Truth Comparison")
 
                 try:
                     y_true = df["Label"]
@@ -610,11 +611,11 @@ with tab1:
                     st.code(report, language="text")
 
                 except Exception as e:
-                    st.warning(f"Label bulundu ama metrik hesaplanamadı: {e}")
+                    st.warning(f"The Label column was found, but metrics could not be calculated: {e}")
 
             csv_bytes = results_df.to_csv(index=False).encode("utf-8")
             st.download_button(
-                label="📥 Sonuç CSV indir",
+                label="📥 Download Results CSV",
                 data=csv_bytes,
                 file_name="flowguard_predictions.csv",
                 mime="text/csv"
