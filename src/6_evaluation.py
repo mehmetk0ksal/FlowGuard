@@ -4,13 +4,9 @@ import os
 import json
 import joblib
 import time
-from sklearn.metrics import f1_score, confusion_matrix, classification_report
+from sklearn.metrics import f1_score, confusion_matrix, classification_report, recall_score, precision_score
 
 def load_test_data_and_model(test_path, features_path, model_path, label_column='Label'):
-    """
-    Kilitli kasadaki hiç DOKUNULMAMIŞ X_test_ham verisini, 
-    kullanılan özellikleri ve eğitilmiş/mühürlenmiş modeli yükler.
-    """
     print(f"Hiç görülmemiş Test Seti yükleniyor: {test_path}")
     df_test = pd.read_csv(test_path)
     
@@ -26,7 +22,6 @@ def load_test_data_and_model(test_path, features_path, model_path, label_column=
     return X_test, y_test, model
 
 def optimize_dtypes_for_trees(X):
-    """Eğitimdeki port optimizasyonunun aynısını test setine de uygular."""
     X_opt = X.copy()
     categorical_candidates = ['Dst Port', 'Src Port']
     for col in categorical_candidates:
@@ -35,10 +30,7 @@ def optimize_dtypes_for_trees(X):
     return X_opt
 
 def save_performance_report(report_text, output_dir):
-    """Hazırlanan raporu logs klasörüne tarih damgasıyla kaydeder."""
     os.makedirs(output_dir, exist_ok=True)
-    
-    # Dosya adını o anki tarih ve saatle oluştur (Örn: final_report_20231027_1430.txt)
     timestamp = time.strftime("%Y%m%d_%H%M%S")
     file_name = f"final_report_{timestamp}.txt"
     output_path = os.path.join(output_dir, file_name)
@@ -49,41 +41,32 @@ def save_performance_report(report_text, output_dir):
     print(f"\n[BİLGİ] Performans raporu (Karne) şuraya mühürlendi: {output_path}")
 
 def evaluate_real_world_performance(model, X_test, y_test):
-    """
-    Gerçek dünya testini yapar, istenen tüm metrikleri ve 
-    ekstra güvenlik analizlerini raporlar. Aynı zamanda rapor metnini döndürür.
-    """
     report_lines = []
     
     def log(message):
-        """Hem ekrana basar hem de rapora ekler."""
         print(message)
         report_lines.append(message)
 
     log("\n--- Gerçek Dünya Sınavı (Final Test) Başladı ---")
     
-    # 1. HIZ TESTİ (Inference Time)
     start_time = time.time()
     y_pred = model.predict(X_test)
     end_time = time.time()
     
     total_time = end_time - start_time
-    time_per_packet = (total_time / len(X_test)) * 1000 # Milisaniye cinsinden
+    time_per_packet = (total_time / len(X_test)) * 1000
     
     log(f"Hız Testi: Toplam {len(X_test)} paket {total_time:.2f} saniyede analiz edildi.")
     log(f"Ortalama Gecikme: Paket başına {time_per_packet:.4f} milisaniye (ms).")
 
-    # 2. GENEL F1 SKORLARI
     macro_f1 = f1_score(y_test, y_pred, average='macro')
-    weighted_f1 = f1_score(y_test, y_pred, average='weighted') # Normal F1 dediğimiz ağırlıklı skor
+    weighted_f1 = f1_score(y_test, y_pred, average='weighted')
     
     log(f"\n=> Genel F1-Score (Ağırlıklı - Normal): %{weighted_f1*100:.2f}")
     log(f"=> Genel F1-Score (Macro - Zorlayıcı): %{macro_f1*100:.2f}")
     
-    # 3. SINIF BAZLI BİLME ORANLARI (Yüzde kaç oranla bildiği - Recall)
     log("\n--- Kategori Bazlı İsabet Oranları (Recall) ---")
     
-    # Sözlüğümüz
     class_names = {
         0: "Normal",
         1: "Recon",
@@ -94,12 +77,10 @@ def evaluate_real_world_performance(model, X_test, y_test):
     
     cm = confusion_matrix(y_test, y_pred)
     
-    # Matrisin her satırı o sınıfın GERÇEK toplamını, köşegenler ise DOĞRU bilinenleri verir
     for i in range(len(cm)):
         total_real = np.sum(cm[i, :])
         correctly_predicted = cm[i, i]
         
-        # Eğer test setinde o sınıftan hiç yoksa 0'a bölme hatası almamak için kontrol
         if total_real > 0:
             accuracy_rate = (correctly_predicted / total_real) * 100
             class_name = class_names.get(i, f"Tür {i}")
@@ -107,15 +88,38 @@ def evaluate_real_world_performance(model, X_test, y_test):
         else:
             log(f"Tür {i} test setinde hiç bulunamadı.")
 
-    # 4. GÜVENLİK AÇIĞI ANALİZİ (False Negative: Saldırıyı Normal sanma durumu)
+    log("\n--- DoS Özel Hata Analizi ---")
+    dos_row = cm[3]
+    dos_total = dos_row.sum()
+
+    if dos_total > 0:
+        for pred_cls, count in enumerate(dos_row):
+            pct = (count / dos_total) * 100
+            log(f"Gerçek DoS -> Tahmin {pred_cls} ({class_names.get(pred_cls, pred_cls):<8}) : {count} adet | %{pct:.2f}")
+
+        wrong_preds = dos_row.copy()
+        wrong_preds[3] = -1
+        most_confused_class = int(np.argmax(wrong_preds))
+        log(f"\nDoS en çok '{class_names.get(most_confused_class, most_confused_class)}' sınıfına kayıyor.")
+
+    log("\n--- Attack-vs-Normal İkili Başarı Analizi ---")
+    y_test_binary = (y_test != 0).astype(int)
+    y_pred_binary = (y_pred != 0).astype(int)
+
+    attack_recall = recall_score(y_test_binary, y_pred_binary)
+    attack_precision = precision_score(y_test_binary, y_pred_binary)
+
+    log(f"Saldırıyı saldırı olarak yakalama oranı (Attack Recall): %{attack_recall*100:.2f}")
+    log(f'Saldırı dediğinde doğru olma oranı (Attack Precision): %{attack_precision*100:.2f}')
+
     log("\n--- Kritik Güvenlik (Kaçak) Analizi ---")
     
     total_attacks = 0
     missed_attacks = 0
     
-    for i in range(1, len(cm)): # 0 (Normal) hariç diğerlerine bak
+    for i in range(1, len(cm)):
         total_attacks += np.sum(cm[i, :])
-        missed_attacks += cm[i, 0] # Gerçekte saldırı (i) olup, modelin 0 (Normal) dedikleri
+        missed_attacks += cm[i, 0]
         
     if total_attacks > 0:
         miss_rate = (missed_attacks / total_attacks) * 100
@@ -132,30 +136,22 @@ def evaluate_real_world_performance(model, X_test, y_test):
     log("\nDetaylı Skorbord (Classification Report):")
     log(classification_report(y_test, y_pred, target_names=[class_names.get(i, str(i)) for i in range(len(cm))]))
 
-    # Toparlanan raporu metin olarak döndür
     return "\n".join(report_lines)
 
 def main():
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     
-    # Dosya Yolları
     test_path = os.path.join(base_dir, "data", "processed", "X_test_ham.csv")
     features_path = os.path.join(base_dir, "configs", "selected_features.json")
     model_path = os.path.join(base_dir, "models", "final_cyber_model.pkl")
-    logs_dir = os.path.join(base_dir, "logs") # Yeni logs klasörü yolu
+    logs_dir = os.path.join(base_dir, "logs")
     
     print("=== 06_evaluation.py (Final Sınavı ve Raporlama) Başlıyor ===")
     
-    # Adım 1: Test verisini, özellikleri ve modeli yükle
     X_test, y_test, loaded_model = load_test_data_and_model(test_path, features_path, model_path)
-    
-    # Adım 2: Eğitimde yapılan Port dönüşümünü testte de yap
     X_test_opt = optimize_dtypes_for_trees(X_test)
     
-    # Adım 3: Sınavı başlat ve sonuç metnini al
     final_report_text = evaluate_real_world_performance(loaded_model, X_test_opt, y_test)
-    
-    # Adım 4: Raporu logs klasörüne kaydet
     save_performance_report(final_report_text, logs_dir)
     
     print("=== Proje Başarıyla Tamamlandı ===")

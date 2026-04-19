@@ -1,0 +1,45 @@
+
+--- Gerçek Dünya Sınavı (Final Test) Başladı ---
+Hız Testi: Toplam 522051 paket 4.80 saniyede analiz edildi.
+Ortalama Gecikme: Paket başına 0.0092 milisaniye (ms).
+
+=> Genel F1-Score (Ağırlıklı - Normal): %98.72
+=> Genel F1-Score (Macro - Zorlayıcı): %71.56
+
+--- Kategori Bazlı İsabet Oranları (Recall) ---
+Tür 0 (Normal  ) -> %99.12 başarı ile tespit edildi. (Bildiği: 504125 / Toplam: 508613)
+Tür 1 (Recon   ) -> %83.92 başarı ile tespit edildi. (Bildiği: 2155 / Toplam: 2568)
+Tür 2 (Exploits) -> %87.81 başarı ile tespit edildi. (Bildiği: 4446 / Toplam: 5063)
+Tür 3 (DoS     ) -> %32.99 başarı ile tespit edildi. (Bildiği: 221 / Toplam: 670)
+Tür 4 (Generic ) -> %74.65 başarı ile tespit edildi. (Bildiği: 3835 / Toplam: 5137)
+
+--- DoS Özel Hata Analizi ---
+Gerçek DoS -> Tahmin 0 (Normal  ) : 5 adet | %0.75
+Gerçek DoS -> Tahmin 1 (Recon   ) : 12 adet | %1.79
+Gerçek DoS -> Tahmin 2 (Exploits) : 361 adet | %53.88
+Gerçek DoS -> Tahmin 3 (DoS     ) : 221 adet | %32.99
+Gerçek DoS -> Tahmin 4 (Generic ) : 71 adet | %10.60
+
+DoS en çok 'Exploits' sınıfına kayıyor.
+
+--- Attack-vs-Normal İkili Başarı Analizi ---
+Saldırıyı saldırı olarak yakalama oranı (Attack Recall): %93.39
+Saldırı dediğinde doğru olma oranı (Attack Precision): %73.66
+
+--- Kritik Güvenlik (Kaçak) Analizi ---
+Test Setindeki Toplam Gerçek Saldırı: 13438
+Modelin Normal Sanıp İÇERİ SIZDIRDIĞI Saldırı: 888 (Kaçak Oranı: %6.61)
+[DURUM: İYİ] Kabul edilebilir düzeyde kaçak var, ancak kurallar sıkılaştırılabilir.
+
+Detaylı Skorbord (Classification Report):
+              precision    recall  f1-score   support
+
+      Normal       1.00      0.99      0.99    508613
+       Recon       0.89      0.84      0.87      2568
+    Exploits       0.67      0.88      0.76      5063
+         DoS       0.36      0.33      0.34       670
+     Generic       0.52      0.75      0.61      5137
+
+    accuracy                           0.99    522051
+   macro avg       0.69      0.76      0.72    522051
+weighted avg       0.99      0.99      0.99    522051

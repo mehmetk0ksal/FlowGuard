@@ -13,43 +13,82 @@ def load_training_data(file_path):
     
     return pd.read_csv(file_path)
 
-def perform_smart_undersampling(df, label_column='Label'):
+def print_distribution(df, label_column='Label', title="Dağılım"):
+    print(f"\n--- {title} ---")
+    counts = df[label_column].value_counts().sort_index()
+    total = len(df)
+    class_names = {
+        0: "Normal",
+        1: "Recon",
+        2: "Exploits",
+        3: "DoS",
+        4: "Generic"
+    }
+    for cls, count in counts.items():
+        pct = (count / total) * 100
+        print(f"Sınıf {cls} ({class_names.get(cls, cls):<8}) -> {count} adet | %{pct:.4f}")
+
+def perform_targeted_sampling(df, label_column='Label'):
     """
-    Saldırıların tamamını korur.
-    Normal trafikten, toplam saldırı sayısının tam 3 katı kadar rastgele örneklem çeker.
-    Böylece %25 Saldırı, %75 Normal trafik oranı yakalanır.
+    1) Normal trafiği azaltır
+    2) Saldırı sınıflarını kendi içinde daha dengeli hale getirir
+    3) Özellikle DoS'u eğitimde daha görünür yapar
     """
-    # 1. Saldırılar (Label != 0) ve Normal Trafik (Label == 0) olarak veriyi ikiye böl
-    attacks = df[df[label_column] != 0]
-    normal_traffic = df[df[label_column] == 0]
-    
-    total_attacks_count = len(attacks)
-    target_normal_count = total_attacks_count * 3
-    
-    print("--- Örnekleme (Sampling) İstatistikleri ---")
-    print(f"Mevcut Toplam Saldırı Adedi: {total_attacks_count}")
-    print(f"Mevcut Normal Trafik Adedi: {len(normal_traffic)}")
-    print(f"Hedeflenen Normal Trafik Adedi (3 Katı): {target_normal_count}")
-    
-    # 2. Undersampling (Alt Örnekleme) İşlemi
-    if len(normal_traffic) < target_normal_count:
-        print("Uyarı: Veri setindeki normal trafik, hedeflenen 3 katı sayıdan daha az!")
-        print("Mevcut olan tüm normal trafik alınıyor...")
-        sampled_normal = normal_traffic
+    print_distribution(df, label_column, title="Orijinal Eğitim Verisi")
+
+    normal_df = df[df[label_column] == 0]
+    attack_df = df[df[label_column] != 0]
+
+    class_counts = attack_df[label_column].value_counts().sort_index().to_dict()
+
+    # Saldırı sınıfları içindeki en büyük sınıfı referans al
+    max_attack_count = max(class_counts.values())
+
+    # Hedef saldırı sınıf büyüklükleri
+    # DoS'a özel boost veriyoruz
+    target_attack_counts = {}
+    for cls, count in class_counts.items():
+        if cls == 3:  # DoS
+            target_attack_counts[cls] = min(max_attack_count, count * 4)
+        else:
+            target_attack_counts[cls] = min(max_attack_count, count * 2)
+
+    print("\n--- Hedef Saldırı Sınıf Boyutları ---")
+    for cls, target in target_attack_counts.items():
+        print(f"Sınıf {cls} hedef -> {target}")
+
+    sampled_attack_parts = []
+
+    for cls, group in attack_df.groupby(label_column):
+        target_n = target_attack_counts[cls]
+
+        if len(group) >= target_n:
+            sampled_group = group.sample(n=target_n, random_state=42)
+        else:
+            # Oversampling with replacement
+            deficit = target_n - len(group)
+            extra = group.sample(n=deficit, replace=True, random_state=42)
+            sampled_group = pd.concat([group, extra], ignore_index=True)
+
+        sampled_attack_parts.append(sampled_group)
+
+    sampled_attacks = pd.concat(sampled_attack_parts, ignore_index=True)
+
+    # Normal trafik: toplam saldırının 2 katı kadar bırak
+    target_normal_count = len(sampled_attacks) * 2
+
+    print(f"\nToplam örneklenmiş saldırı: {len(sampled_attacks)}")
+    print(f"Hedef normal trafik: {target_normal_count}")
+
+    if len(normal_df) > target_normal_count:
+        sampled_normal = normal_df.sample(n=target_normal_count, random_state=42)
     else:
-        # Normal trafikten rastgele örneklem çek (random_state=42 ile tekrarlanabilirlik sağlanır)
-        sampled_normal = normal_traffic.sample(n=target_normal_count, random_state=42)
-    
-    # 3. Altın Veri Setini Birleştirme
-    balanced_df = pd.concat([attacks, sampled_normal])
-    
-    # 4. Veriyi Karıştırma (Modelin sırayı ezberlemesini önlemek için çok kritiktir)
+        sampled_normal = normal_df
+
+    balanced_df = pd.concat([sampled_normal, sampled_attacks], ignore_index=True)
     balanced_df = shuffle(balanced_df, random_state=42).reset_index(drop=True)
-    
-    print("--- Birleştirme Tamamlandı ---")
-    print(f"Yeni Veri Seti Dağılımı:")
-    print(balanced_df[label_column].value_counts(normalize=True) * 100) # Yüzdelik oranları göster
-    
+
+    print_distribution(balanced_df, label_column, title="Sampling Sonrası Yeni Eğitim Verisi")
     return balanced_df
 
 def save_sampled_data(df, output_path):
@@ -61,20 +100,14 @@ def save_sampled_data(df, output_path):
     print(f"Dengelenmiş veri setinin toplam satır sayısı: {len(df)}")
 
 def main():
-    # Dosya yolları
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     input_file = os.path.join(base_dir, "data", "processed", "X_train_ham.csv")
     output_file = os.path.join(base_dir, "data", "processed", "X_train_sampled.csv")
     
-    print("=== 02_sampling.py (Dengeleme) Başlıyor ===")
+    print("=== 02_sampling.py (Hedefli Dengeleme) Başlıyor ===")
     
-    # Adım 1: Sadece saf eğitim kasasını yükle
     train_df = load_training_data(input_file)
-    
-    # Adım 2: Akıllı Undersampling işlemini uygula
-    balanced_train_df = perform_smart_undersampling(train_df)
-    
-    # Adım 3: Sonucu kaydet
+    balanced_train_df = perform_targeted_sampling(train_df)
     save_sampled_data(balanced_train_df, output_file)
     
     print("=== Dengeleme Başarıyla Tamamlandı ===")

@@ -20,7 +20,21 @@ def load_and_clean_data(file_path):
     print(f"Eşsiz satır sayısı: {final_row_count}")
     
     return df
+def print_class_distribution(df, label_column='Label', title="Sınıf Dağılımı"):
+    print(f"\n--- {title} ---")
+    counts = df[label_column].value_counts().sort_index()
+    total = len(df)
+    class_names = {
+        0: "Normal",
+        1: "Recon",
+        2: "Exploits",
+        3: "DoS",
+        4: "Generic"
+    }
 
+    for cls, count in counts.items():
+        pct = (count / total) * 100
+        print(f"Sınıf {cls} ({class_names.get(cls, cls):<8}) -> {count} adet | %{pct:.4f}")
 def handle_missing_and_infinite_values(df):
     """
     Veri setindeki sonsuz (inf) değerleri tespit eder, NaN değerine çevirir 
