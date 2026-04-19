@@ -19,7 +19,7 @@ from sklearn.metrics import (
 # PAGE CONFIG
 # ---------------------------------------------------
 st.set_page_config(
-    page_title="FlowGuard ",
+    page_title="FlowGuard",
     page_icon="🛡️",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -194,7 +194,30 @@ hr {
 def load_model(model_path: str):
     if not os.path.exists(model_path):
         raise FileNotFoundError(f"Model not found: {model_path}")
-    return joblib.load(model_path)
+
+    model = joblib.load(model_path)
+
+    # Force CPU for inference if possible
+    try:
+        if hasattr(model, "set_params"):
+            model.set_params(device="cpu")
+    except Exception:
+        pass
+
+    # If VotingClassifier or similar ensemble contains estimators
+    try:
+        if hasattr(model, "estimators"):
+            for _, estimator in model.estimators:
+                if hasattr(estimator, "set_params"):
+                    try:
+                        estimator.set_params(device="cpu")
+                    except Exception:
+                        pass
+    except Exception:
+        pass
+
+    return model
+
 
 @st.cache_data
 def load_selected_features(features_path: str):
@@ -203,12 +226,14 @@ def load_selected_features(features_path: str):
     with open(features_path, "r", encoding="utf-8") as f:
         return json.load(f)
 
+
 def optimize_dtypes_for_trees(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
     for col in ["Dst Port", "Src Port"]:
         if col in df.columns:
             df[col] = df[col].astype("category")
     return df
+
 
 def prepare_input_dataframe(df: pd.DataFrame, selected_features: list[str]) -> pd.DataFrame:
     missing_cols = [col for col in selected_features if col not in df.columns]
@@ -220,8 +245,10 @@ def prepare_input_dataframe(df: pd.DataFrame, selected_features: list[str]) -> p
     X = optimize_dtypes_for_trees(X)
     return X
 
+
 def map_prediction_labels(preds):
     return [CLASS_NAMES.get(int(p), f"Unknown-{p}") for p in preds]
+
 
 def safe_predict_proba(model, X: pd.DataFrame):
     if hasattr(model, "predict_proba"):
@@ -230,6 +257,7 @@ def safe_predict_proba(model, X: pd.DataFrame):
         except Exception:
             return None
     return None
+
 
 def build_results_df(original_df: pd.DataFrame, preds, proba=None):
     result_df = original_df.copy()
@@ -243,6 +271,7 @@ def build_results_df(original_df: pd.DataFrame, preds, proba=None):
             result_df[f"Prob_{class_name}"] = proba[:, class_id]
     return result_df
 
+
 # ---------------------------------------------------
 # LOG PARSER
 # ---------------------------------------------------
@@ -252,6 +281,7 @@ def find_latest_log_file(logs_dir: str):
     if not files:
         return None
     return max(files, key=os.path.getmtime)
+
 
 def parse_latest_log(log_path: str):
     if not log_path or not os.path.exists(log_path):
@@ -269,7 +299,7 @@ def parse_latest_log(log_path: str):
         "recall_by_class": {}
     }
 
-    # Still matches Turkish log content
+    # Matches current Turkish log format
     weighted_match = re.search(r"Ağırlıklı - Normal\): %([0-9.]+)", text)
     macro_match = re.search(r"Macro - Zorlayıcı\): %([0-9.]+)", text)
     total_attack_match = re.search(r"Toplam Gerçek Saldırı: (\d+)", text)
@@ -299,6 +329,7 @@ def parse_latest_log(log_path: str):
 
     return metrics
 
+
 # ---------------------------------------------------
 # CHART HELPERS
 # ---------------------------------------------------
@@ -326,6 +357,7 @@ def make_donut(values, names, title, hole=0.62):
     )
     return fig
 
+
 def make_bar(df, x, y, title):
     fig = px.bar(
         df,
@@ -346,6 +378,7 @@ def make_bar(df, x, y, title):
     )
     fig.update_traces(textposition="outside")
     return fig
+
 
 # ---------------------------------------------------
 # LOAD CORE ASSETS
@@ -459,7 +492,7 @@ if latest_log_metrics:
                 names=recall_df["Class"],
                 title="Recall Donut Chart"
             )
-            st.plotly_chart(fig_recall, use_container_width=True)
+            st.plotly_chart(fig_recall, width="stretch")
 
         st.markdown('</div>', unsafe_allow_html=True)
 
@@ -474,7 +507,7 @@ if latest_log_metrics:
                 names=["Blocked", "Leaked"],
                 title="Attack Containment"
             )
-            st.plotly_chart(fig_leak, use_container_width=True)
+            st.plotly_chart(fig_leak, width="stretch")
 
         st.markdown('</div>', unsafe_allow_html=True)
 
@@ -488,7 +521,7 @@ if latest_log_metrics:
         if recall_data:
             recall_df = pd.DataFrame(recall_data)
             fig_bar = make_bar(recall_df, x="Class", y="Recall", title="Class Recall %")
-            st.plotly_chart(fig_bar, use_container_width=True)
+            st.plotly_chart(fig_bar, width="stretch")
 
         st.markdown('</div>', unsafe_allow_html=True)
 
@@ -531,7 +564,7 @@ with tab1:
         try:
             df = pd.read_csv(uploaded_file)
             st.success(f"CSV uploaded successfully. Rows: {len(df)} | Columns: {len(df.columns)}")
-            st.dataframe(df.head(15), use_container_width=True)
+            st.dataframe(df.head(15), width="stretch")
         except Exception as e:
             st.error(f"Could not read CSV: {e}")
             st.stop()
@@ -555,9 +588,33 @@ with tab1:
             st.success("Prediction completed.")
 
             m1, m2, m3 = st.columns(3)
-            m1.metric("Total Records", len(results_df))
-            m2.metric("Feature Count", len(selected_features))
-            m3.metric("Predicted Class Variety", results_df["Predicted_Label_Name"].nunique())
+
+            with m1:
+                st.markdown(f"""
+                <div class="metric-card">
+                    <div class="metric-title">Total Records</div>
+                    <div class="metric-value">{len(results_df)}</div>
+                    <div class="metric-delta">Processed rows in uploaded CSV</div>
+                </div>
+                """, unsafe_allow_html=True)
+
+            with m2:
+                st.markdown(f"""
+                <div class="metric-card">
+                    <div class="metric-title">Feature Count</div>
+                    <div class="metric-value">{len(selected_features)}</div>
+                    <div class="metric-delta">Model input feature size</div>
+                </div>
+                """, unsafe_allow_html=True)
+
+            with m3:
+                st.markdown(f"""
+                <div class="metric-card">
+                    <div class="metric-title">Predicted Class Variety</div>
+                    <div class="metric-value">{results_df["Predicted_Label_Name"].nunique()}</div>
+                    <div class="metric-delta">Unique predicted categories</div>
+                </div>
+                """, unsafe_allow_html=True)
 
             dist_df = (
                 results_df["Predicted_Label_Name"]
@@ -574,14 +631,14 @@ with tab1:
                     names=dist_df["Class"],
                     title="Prediction Distribution"
                 )
-                st.plotly_chart(fig_pred, use_container_width=True)
+                st.plotly_chart(fig_pred, width="stretch")
 
             with col_b:
                 fig_pred_bar = make_bar(dist_df, x="Class", y="Count", title="Predicted Class Counts")
-                st.plotly_chart(fig_pred_bar, use_container_width=True)
+                st.plotly_chart(fig_pred_bar, width="stretch")
 
             st.markdown("### Results Table")
-            st.dataframe(results_df.head(200), use_container_width=True)
+            st.dataframe(results_df.head(200), width="stretch")
 
             if "Label" in df.columns:
                 st.markdown("### Ground Truth Comparison")
@@ -605,7 +662,7 @@ with tab1:
                         index=[f"True_{CLASS_NAMES.get(i, i)}" for i in range(cm.shape[0])],
                         columns=[f"Pred_{CLASS_NAMES.get(i, i)}" for i in range(cm.shape[1])]
                     )
-                    st.dataframe(cm_df, use_container_width=True)
+                    st.dataframe(cm_df, width="stretch")
 
                     report = classification_report(y_true, y_pred, zero_division=0)
                     st.code(report, language="text")
