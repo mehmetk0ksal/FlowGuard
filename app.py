@@ -637,6 +637,140 @@ with tab1:
                 fig_pred_bar = make_bar(dist_df, x="Class", y="Count", title="Predicted Class Counts")
                 st.plotly_chart(fig_pred_bar, width="stretch")
 
+            # ---------------------------------------------------
+            # THREAT BREAKDOWN PANEL
+            # ---------------------------------------------------
+            st.markdown("<br>", unsafe_allow_html=True)
+            st.markdown('<div class="section-title">🔍 Threat Intelligence Breakdown</div>', unsafe_allow_html=True)
+
+            THREAT_META = {
+                "Normal":   {"icon": "🟢", "color": "#00FF9F", "desc": "Benign traffic — no threat detected."},
+                "Recon":    {"icon": "🔵", "color": "#00F7FF", "desc": "Reconnaissance / port scanning activity attempting to map the network."},
+                "Exploits": {"icon": "🔴", "color": "#FF4D6D", "desc": "Exploit attempts targeting known vulnerabilities (RCE, Shellcode, Backdoor, Worms)."},
+                "DoS":      {"icon": "🟠", "color": "#FFCC00", "desc": "Denial-of-Service — high-volume flood disrupting service availability."},
+                "Generic":  {"icon": "🟣", "color": "#8B5CF6", "desc": "Generic / Fuzzer attacks with irregular, obfuscated payloads."},
+            }
+
+            threat_counts = results_df["Predicted_Label_Name"].value_counts().to_dict()
+            total_records = len(results_df)
+            attack_total  = sum(v for k, v in threat_counts.items() if k != "Normal")
+
+            # Top summary bar: safe vs threat
+            safe_count = threat_counts.get("Normal", 0)
+            safe_pct   = safe_count / total_records * 100 if total_records else 0
+            atk_pct    = attack_total / total_records * 100 if total_records else 0
+
+            st.markdown(f"""
+            <div class="glass-card" style="margin-bottom:1rem;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.7rem;">
+                    <span style="font-size:1rem; font-weight:700; color:#dffcff;">Traffic Safety Overview</span>
+                    <span style="color:#8aa0b5; font-size:0.85rem;">{total_records:,} total flows analyzed</span>
+                </div>
+                <div style="background:rgba(255,255,255,0.06); border-radius:8px; overflow:hidden; height:18px; display:flex;">
+                    <div style="width:{safe_pct:.1f}%; background:linear-gradient(90deg,#00FF9F,#00c97a); transition:width 0.5s;"></div>
+                    <div style="width:{atk_pct:.1f}%; background:linear-gradient(90deg,#FF2BD6,#FF4D6D); transition:width 0.5s;"></div>
+                </div>
+                <div style="display:flex; gap:1.5rem; margin-top:0.5rem; font-size:0.85rem;">
+                    <span style="color:#00FF9F;">🟢 Safe &nbsp;{safe_count:,} ({safe_pct:.1f}%)</span>
+                    <span style="color:#FF4D6D;">🔴 Threats &nbsp;{attack_total:,} ({atk_pct:.1f}%)</span>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+            # Per-class breakdown cards
+            card_cols = st.columns(len(THREAT_META))
+            for col, (cls_name, meta) in zip(card_cols, THREAT_META.items()):
+                cnt = threat_counts.get(cls_name, 0)
+                pct = cnt / total_records * 100 if total_records else 0
+                with col:
+                    st.markdown(f"""
+                    <div style="
+                        background:linear-gradient(145deg, rgba(10,20,35,0.88), rgba(18,30,50,0.72));
+                        border:1px solid rgba(255,255,255,0.07);
+                        border-top: 3px solid {meta['color']};
+                        border-radius:14px; padding:0.9rem 0.8rem;
+                        box-shadow: 0 0 16px {meta['color']}18;
+                        text-align:center;
+                    ">
+                        <div style="font-size:1.6rem;">{meta['icon']}</div>
+                        <div style="font-size:0.75rem; color:#8aa0b5; text-transform:uppercase;
+                                    letter-spacing:0.08em; margin:0.3rem 0 0.2rem;">{cls_name}</div>
+                        <div style="font-size:1.6rem; font-weight:800; color:{meta['color']};">{cnt:,}</div>
+                        <div style="font-size:0.82rem; color:#8affc1; margin-top:0.15rem;">{pct:.1f}%</div>
+                        <div style="font-size:0.72rem; color:#607080; margin-top:0.4rem; line-height:1.35;">{meta['desc']}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+            st.markdown("<br>", unsafe_allow_html=True)
+
+            # Stacked horizontal bar — flow composition per class
+            st.markdown('<div class="glass-card">', unsafe_allow_html=True)
+            st.markdown('<div class="section-title">Flow Composition by Threat Type</div>', unsafe_allow_html=True)
+
+            bar_colors = [THREAT_META[c]["color"] for c in THREAT_META if c in threat_counts]
+            fig_stacked = go.Figure()
+            for cls_name, meta in THREAT_META.items():
+                cnt = threat_counts.get(cls_name, 0)
+                if cnt > 0:
+                    fig_stacked.add_trace(go.Bar(
+                        name=cls_name,
+                        x=[cnt],
+                        y=["Traffic"],
+                        orientation="h",
+                        marker_color=meta["color"],
+                        text=f"{cls_name}: {cnt:,}",
+                        textposition="inside",
+                        insidetextanchor="middle",
+                        hovertemplate=f"<b>{cls_name}</b><br>Count: {cnt:,}<br>Share: {cnt/total_records*100:.1f}%<extra></extra>",
+                    ))
+            fig_stacked.update_layout(
+                barmode="stack",
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                font=dict(color="#E6F7FF"),
+                showlegend=True,
+                legend=dict(orientation="h", y=-0.3),
+                height=130,
+                margin=dict(l=10, r=10, t=10, b=50),
+                xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+                yaxis=dict(showgrid=False, zeroline=False),
+            )
+            st.plotly_chart(fig_stacked, use_container_width=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+
+            st.markdown("<br>", unsafe_allow_html=True)
+
+            # Confidence histogram if proba available
+            if proba is not None and "Confidence" in results_df.columns:
+                st.markdown('<div class="glass-card">', unsafe_allow_html=True)
+                st.markdown('<div class="section-title">Model Confidence Distribution</div>', unsafe_allow_html=True)
+                fig_conf = go.Figure()
+                for cls_name, meta in THREAT_META.items():
+                    subset = results_df[results_df["Predicted_Label_Name"] == cls_name]["Confidence"]
+                    if len(subset) > 0:
+                        fig_conf.add_trace(go.Histogram(
+                            x=subset,
+                            name=cls_name,
+                            marker_color=meta["color"],
+                            opacity=0.75,
+                            nbinsx=30,
+                            hovertemplate=f"<b>{cls_name}</b><br>Confidence: %{{x:.2f}}<br>Count: %{{y}}<extra></extra>",
+                        ))
+                fig_conf.update_layout(
+                    barmode="overlay",
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    plot_bgcolor="rgba(0,0,0,0)",
+                    font=dict(color="#E6F7FF"),
+                    legend=dict(orientation="h", y=-0.25),
+                    xaxis_title="Confidence Score",
+                    yaxis_title="Flow Count",
+                    margin=dict(l=20, r=20, t=20, b=60),
+                    height=280,
+                )
+                st.plotly_chart(fig_conf, use_container_width=True)
+                st.markdown('</div>', unsafe_allow_html=True)
+                st.markdown("<br>", unsafe_allow_html=True)
+
             st.markdown("### Results Table")
             st.dataframe(results_df.head(200), width="stretch")
 

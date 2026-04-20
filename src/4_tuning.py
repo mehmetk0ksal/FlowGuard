@@ -47,7 +47,7 @@ def calculate_healthy_smote_strategy(y):
         if count == majority_count:
             strategy[cls] = count 
         else:
-            healthy_target = int(min(count * 15, majority_count * 0.10))
+            healthy_target = int(min(count * 53, majority_count * 0.10))
             strategy[cls] = max(count, healthy_target)
             print(f"Sınıf {cls}: {count} adet -> Hedeflenen Sentetik Limit: {strategy[cls]} adet")
             
