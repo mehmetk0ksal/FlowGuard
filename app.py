@@ -556,7 +556,8 @@ with tab1:
 
     st.markdown(
         '<div class="small-muted">For best results, your CSV should contain the columns expected by the model. '
-        'If it also includes a <b>Label</b> column, we can compare against the ground truth.</div>',
+        'If it also includes a <b>Truth_Label</b> column (integer class IDs: 0=Normal, 1=Recon, 2=Exploits, 3=DoS, 4=Generic), '
+        'FlowGuard will automatically show a ground-truth comparison with confusion matrix and per-class metrics.</div>',
         unsafe_allow_html=True
     )
 
@@ -774,35 +775,141 @@ with tab1:
             st.markdown("### Results Table")
             st.dataframe(results_df.head(200), width="stretch")
 
-            if "Label" in df.columns:
-                st.markdown("### Ground Truth Comparison")
+            # Support both "Truth_Label" (demo CSV) and legacy "Label" column
+            truth_col = None
+            if "Truth_Label" in df.columns:
+                truth_col = "Truth_Label"
+            elif "Label" in df.columns:
+                truth_col = "Label"
+
+            if truth_col is not None:
+                st.markdown("<br>", unsafe_allow_html=True)
+                st.markdown('<div class="glass-card">', unsafe_allow_html=True)
+                st.markdown(
+                    f'<div class="section-title">🎯 Ground Truth Comparison'
+                    f'<span style="font-size:0.78rem; color:#8aa0b5; font-weight:400; margin-left:0.8rem;">'
+                    f'(source column: <code>{truth_col}</code>)</span></div>',
+                    unsafe_allow_html=True
+                )
 
                 try:
-                    y_true = df["Label"]
-                    y_pred = preds
+                    y_true = df[truth_col].astype(int)
+                    y_pred_arr = np.array(preds).astype(int)
 
-                    acc = accuracy_score(y_true, y_pred)
-                    macro_f1 = f1_score(y_true, y_pred, average="macro")
-                    weighted_f1 = f1_score(y_true, y_pred, average="weighted")
+                    acc          = accuracy_score(y_true, y_pred_arr)
+                    macro_f1     = f1_score(y_true, y_pred_arr, average="macro",     zero_division=0)
+                    weighted_f1  = f1_score(y_true, y_pred_arr, average="weighted",  zero_division=0)
 
-                    a1, a2, a3 = st.columns(3)
-                    a1.metric("Accuracy", f"{acc:.4f}")
-                    a2.metric("Macro F1", f"{macro_f1:.4f}")
-                    a3.metric("Weighted F1", f"{weighted_f1:.4f}")
+                    # ── Top metric row ──────────────────────────────────────────
+                    g1, g2, g3 = st.columns(3)
+                    for col_obj, label, val, delta in [
+                        (g1, "Accuracy",    acc,         "Overall correct classifications"),
+                        (g2, "Macro F1",    macro_f1,    "Equal weight per class (hard metric)"),
+                        (g3, "Weighted F1", weighted_f1, "Weighted by class size"),
+                    ]:
+                        with col_obj:
+                            st.markdown(f"""
+                            <div class="metric-card">
+                                <div class="metric-title">{label}</div>
+                                <div class="metric-value" style="color:#00f7ff;">{val:.4f}</div>
+                                <div class="metric-delta">{delta}</div>
+                            </div>
+                            """, unsafe_allow_html=True)
 
-                    cm = confusion_matrix(y_true, y_pred)
-                    cm_df = pd.DataFrame(
-                        cm,
-                        index=[f"True_{CLASS_NAMES.get(i, i)}" for i in range(cm.shape[0])],
-                        columns=[f"Pred_{CLASS_NAMES.get(i, i)}" for i in range(cm.shape[1])]
+                    st.markdown("<br>", unsafe_allow_html=True)
+
+                    # ── Confusion matrix heatmap ────────────────────────────────
+                    all_classes = sorted(set(y_true.unique()) | set(np.unique(y_pred_arr)))
+                    class_labels = [CLASS_NAMES.get(i, str(i)) for i in all_classes]
+
+                    cm = confusion_matrix(y_true, y_pred_arr, labels=all_classes)
+
+                    # Normalised (%) version for colour, raw counts for text
+                    cm_norm = cm.astype(float)
+                    row_sums = cm_norm.sum(axis=1, keepdims=True)
+                    row_sums[row_sums == 0] = 1          # avoid /0
+                    cm_pct   = cm_norm / row_sums * 100
+
+                    # Build annotation text: "N\n(XX.X%)"
+                    annotations = [[f"{cm[r][c]}<br>({cm_pct[r][c]:.1f}%)"
+                                    for c in range(len(all_classes))]
+                                   for r in range(len(all_classes))]
+
+                    fig_cm = go.Figure(data=go.Heatmap(
+                        z=cm_pct,
+                        x=[f"Pred: {l}" for l in class_labels],
+                        y=[f"True: {l}" for l in class_labels],
+                        text=annotations,
+                        texttemplate="%{text}",
+                        colorscale=[
+                            [0.0,  "rgba(10,20,40,0.9)"],
+                            [0.4,  "rgba(0,100,180,0.7)"],
+                            [0.7,  "rgba(0,200,220,0.85)"],
+                            [1.0,  "rgba(0,247,255,1.0)"],
+                        ],
+                        showscale=True,
+                        colorbar=dict(
+                            title="Recall %",
+                            tickfont=dict(color="#8aa0b5"),
+                            titlefont=dict(color="#8aa0b5"),
+                        ),
+                        hovertemplate=(
+                            "<b>True: %{y}</b><br>"
+                            "<b>Predicted: %{x}</b><br>"
+                            "Count: %{text}<extra></extra>"
+                        ),
+                    ))
+                    fig_cm.update_layout(
+                        title="Confusion Matrix (row-normalised recall %)",
+                        paper_bgcolor="rgba(0,0,0,0)",
+                        plot_bgcolor="rgba(0,0,0,0)",
+                        font=dict(color="#E6F7FF", size=13),
+                        margin=dict(l=20, r=20, t=50, b=20),
+                        height=360,
+                        xaxis=dict(side="bottom"),
                     )
-                    st.dataframe(cm_df, width="stretch")
+                    st.plotly_chart(fig_cm, use_container_width=True)
 
-                    report = classification_report(y_true, y_pred, zero_division=0)
-                    st.code(report, language="text")
+                    # ── Per-class metrics table ─────────────────────────────────
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    st.markdown('<div class="section-title">Per-Class Performance</div>', unsafe_allow_html=True)
+
+                    report_dict = classification_report(
+                        y_true, y_pred_arr,
+                        labels=all_classes,
+                        target_names=class_labels,
+                        zero_division=0,
+                        output_dict=True
+                    )
+                    rows = []
+                    for lbl in class_labels:
+                        if lbl in report_dict:
+                            r = report_dict[lbl]
+                            rows.append({
+                                "Class":     lbl,
+                                "Precision": f"{r['precision']:.4f}",
+                                "Recall":    f"{r['recall']:.4f}",
+                                "F1-Score":  f"{r['f1-score']:.4f}",
+                                "Support":   int(r['support']),
+                            })
+                    st.dataframe(pd.DataFrame(rows).set_index("Class"), use_container_width=True)
+
+                    # ── Raw text report (collapsible) ───────────────────────────
+                    with st.expander("📋 Full classification_report (text)"):
+                        st.code(
+                            classification_report(
+                                y_true, y_pred_arr,
+                                labels=all_classes,
+                                target_names=class_labels,
+                                zero_division=0
+                            ),
+                            language="text"
+                        )
 
                 except Exception as e:
-                    st.warning(f"The Label column was found, but metrics could not be calculated: {e}")
+                    st.warning(f"Ground truth column found but metrics could not be calculated: {e}")
+
+                st.markdown('</div>', unsafe_allow_html=True)
 
             csv_bytes = results_df.to_csv(index=False).encode("utf-8")
             st.download_button(
